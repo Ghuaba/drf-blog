@@ -37,7 +37,7 @@ DJANGO_APPS = [
 
 #Aplicaciones NUESTRAS 
 PROJECTS_APPS = [
-
+    'apps.blog',
 ]
 
 #Aplicaciones de TERCEROS
