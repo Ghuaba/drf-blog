@@ -18,12 +18,12 @@ def category_thumbnail_directory(instance, filename):
 
 class Category(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    parents = models.ForeignKey("self", related_name="children", on_delete=models.CASCADE, null=True, blank=True)
+    parent = models.ForeignKey("self", related_name="children", on_delete=models.CASCADE, null=True, blank=True)
     
     name = models.CharField(max_length=255)
     title = models.CharField(max_length=128, null=True, blank=True)
-    description = models.CharField(max_length=256)
-    thumbnail = models.ImageField(upload_to = blog_thumbnail_directory)
+    description = models.CharField(max_length=256, null=True, blank=True)
+    thumbnail = models.ImageField(upload_to = blog_thumbnail_directory, null=True, blank=True)
     slug = models.CharField(max_length=128)
 
     def __str__(self):
