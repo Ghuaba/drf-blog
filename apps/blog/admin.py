@@ -21,6 +21,13 @@ class PostAdminForm(forms.ModelForm):
         model = Post
         fields = '__all__'
 
+class HeadingInline(admin.TabularInline):
+    model = Heading
+    extra = 1
+    fields = ('title', 'level', 'order', 'slug')
+    prepopulated_fields = {'slug': ('title',)}
+    ordering = ('order',)
+
 
 #Para registrar Publicaciones
 @admin.register(Post)
@@ -43,13 +50,14 @@ class PostAdmin(admin.ModelAdmin):
             'fields': ('uuid',)
         }),
     )
+    inlines = [HeadingInline]
 
-
-@admin.register(Heading)
-class HeadingAdmin(admin.ModelAdmin):
-    list_display = ('title', 'post', 'level', 'order',)
-    search_fields = ('title', 'post__title')
-    list_filter = ('level', 'post')
-    oredering = ('post', 'order')
-    prepopulated_fields = {'slug': ('title',)}
+#Ya se hace uso de Inline
+# @admin.register(Heading)
+# class HeadingAdmin(admin.ModelAdmin):
+#     list_display = ('title', 'post', 'level', 'order',)
+#     search_fields = ('title', 'post__title')
+#     list_filter = ('level', 'post')
+#     oredering = ('post', 'order')
+#     prepopulated_fields = {'slug': ('title',)}
 
