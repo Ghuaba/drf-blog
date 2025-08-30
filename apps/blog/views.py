@@ -7,7 +7,7 @@ from .serializers import PostListSerializer, PostSerializer
 class PostListView(ListAPIView):
     #para mostrar solo los publicados , POstObjects creado por mi que se le asigan a la varaible post_objects
     queryset = Post.post_objects.all()
-    serializer = PostListSerializer
+    serializer_class = PostListSerializer
 
 
 class PostDetailView(RetrieveAPIView):
