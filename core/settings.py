@@ -44,9 +44,29 @@ PROJECTS_APPS = [
 THIRD_PARTY_APPS = [
     'rest_framework',
     'channels',
+    'django_ckeditor_5',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECTS_APPS + THIRD_PARTY_APPS
+
+#Config para usar poe default o exntends etc, es el nombre que aplicamos lo que queremois usar con CKEditor
+CKEDITOR_5_CONFIGS = {
+    "default": {
+        "toolbar": [
+            "heading",
+            "|",
+            "bold",
+            "italic",
+            "link",
+            "bulletedList",
+            "numberedList",
+            "blockQuote",
+        ],
+        "autoParagraph": False
+    }
+}
+
+
 
 
 MIDDLEWARE = [

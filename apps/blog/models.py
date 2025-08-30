@@ -1,6 +1,9 @@
 import uuid
 from django.utils.text import slugify
 from django.db import models
+from django_ckeditor_5.fields import CKEditor5Field
+
+
 
 def blog_thumbnail_directory(instance, filename):
     return "blog/{0}/{1}".format(instance.title, filename)
@@ -57,7 +60,9 @@ class Post(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     title = models.CharField(max_length=90)
     description = models.CharField(max_length=128)
-    content = models.TextField()
+    #content = models.TextField()
+    content = CKEditor5Field('Content', config_name='default')
+
     keywords = models.CharField(max_length=128)
     slug = models.CharField(max_length = 128)
     thumbnail = models.ImageField(upload_to=blog_thumbnail_directory)
