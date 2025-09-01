@@ -1,10 +1,10 @@
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from .utils import get_client_ip
 
-
-from .models import Post, Heading
-from .serializers import PostListSerializer, PostSerializer, HeadingSerializer
+from .models import Post, Heading, PostView
+from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, ViewPostSerializer
 
 
 #Uso con APIView
@@ -20,9 +20,12 @@ class PostDetailView(APIView):
         slug = self.kwargs.get('slug')
         post = Post.post_objects.get(slug=slug)
         serialized_post = PostSerializer(post).data
-        #Metodo sencillo para conteo de vistas, pero vulnerable, en cada llamada se suma
-        # post.views += 1
-        # post.save()
+        #Para hacer conteo de visualizaciones
+        client_ip =  get_client_ip(request)
+        if PostView.objects.filter(post=post, ip_address=client_ip).exists():
+            return Response(serialized_post)
+
+        PostView.objects.create(post=post, ip_address=client_ip)
         return Response(serialized_post)
 
 

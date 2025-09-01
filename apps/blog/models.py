@@ -68,19 +68,27 @@ class Post(models.Model):
     thumbnail = models.ImageField(upload_to=blog_thumbnail_directory)
     #author = 
     status = models.CharField(max_length=20, choices=PostStatus.choices, default=PostStatus.DRAFT)
+
     objects = models.Manager() #Default manager
     post_objects = PostObjects()  # Custom manager for published posts
+
     category = models.ForeignKey(Category, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    views = models.IntegerField(default=0)
     class Meta:
         ordering = ('status', '-created_at',)  # Ordena por status y luego fecha (desc)
-
 
     def __str__(self):
         return self.title
     
+
+class PostView(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    post = models.ForeignKey(Post, on_delete= models.PROTECT, related_name='post_view')
+    ip_address = models.GenericIPAddressField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class Heading(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     post = models.ForeignKey(Post, on_delete=models.PROTECT, related_name='headings')

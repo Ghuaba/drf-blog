@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Post, Heading, Category
+from .models import Post, Heading, Category, PostView
 
 class CategorySerializer(serializers.ModelSerializer):
     # Para GET → mostrar solo el UUID de la categoría padre
@@ -30,6 +30,14 @@ class CategoryListSerializer(serializers.ModelSerializer):
         ]
 
 
+class ViewPostSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostView
+        fields=[
+            "uuid", "post", "ip_address", "created_at"
+        ]
+
+
 #Uso normal y sencillo de serializer
 class HeadingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -43,43 +51,37 @@ class HeadingSerializer(serializers.ModelSerializer):
 
 
 class PostSerializer(serializers.ModelSerializer):
-    # # Para GET → mostrar datos completos de la categoría
-    # category = CategorySerializer(read_only=True)
-    # # Para POST/PUT → recibir UUID del cliente
-    # category_uuid = serializers.SlugRelatedField(
-    #     source="category",
-    #     slug_field="uuid",
-    #     queryset=Category.objects.all(),
-    #     write_only=True
-    # )
     headings = HeadingSerializer(many=True)
     category = CategoryListSerializer()
-
+    view_count = serializers.SerializerMethodField()
     class Meta:
         model = Post
         #fields = "__all__" #se llama todo
-        fields = ["uuid", "views", "category", "title", "description", "content", "slug", "keywords", "thumbnail", "status", "headings", "created_at", "updated_at"]
+        fields = ["uuid", "status", "view_count", "category", "title", "description", "content", "slug", "keywords", "thumbnail", "status", "headings", "created_at", "updated_at"]
 
+    def get_view_count(self, obj):
+        return obj.post_view.count()
 
 
 
 #Para la lista en la "biblioteca" resumen, sin detalles 
 class PostListSerializer(serializers.ModelSerializer):
-    # #Se agrega solo par aobtener solo el uuid de category
-    # category = serializers.SlugRelatedField(
-    # read_only=True,
-    # slug_field="uuid"
-    # )
     category = CategoryListSerializer()
+    view_count = serializers.SerializerMethodField()
+    
     class Meta:
         model = Post
         fields = [
             "uuid",
-            "views",
+            "view_count",
+            "status",
             "title",
             "description",
             "slug",
             "thumbnail",
             "category",
         ]
+
+    def get_view_count(self, obj):
+        return obj.post_view.count()
 
