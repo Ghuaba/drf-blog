@@ -20,6 +20,9 @@ class PostDetailView(APIView):
         slug = self.kwargs.get('slug')
         post = Post.post_objects.get(slug=slug)
         serialized_post = PostSerializer(post).data
+        #Metodo sencillo para conteo de vistas, pero vulnerable, en cada llamada se suma
+        # post.views += 1
+        # post.save()
         return Response(serialized_post)
 
 

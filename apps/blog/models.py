@@ -73,8 +73,7 @@ class Post(models.Model):
     category = models.ForeignKey(Category, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-
+    views = models.IntegerField(default=0)
     class Meta:
         ordering = ('status', '-created_at',)  # Ordena por status y luego fecha (desc)
 

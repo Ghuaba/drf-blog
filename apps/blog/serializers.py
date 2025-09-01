@@ -58,7 +58,7 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         #fields = "__all__" #se llama todo
-        fields = ["uuid", "category", "title", "description", "content", "slug", "keywords", "thumbnail", "status", "headings", "created_at", "updated_at"]
+        fields = ["uuid", "views", "category", "title", "description", "content", "slug", "keywords", "thumbnail", "status", "headings", "created_at", "updated_at"]
 
 
 
@@ -75,6 +75,7 @@ class PostListSerializer(serializers.ModelSerializer):
         model = Post
         fields = [
             "uuid",
+            "views",
             "title",
             "description",
             "slug",

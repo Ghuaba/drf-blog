@@ -38,7 +38,7 @@ class PostAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('title',)}
     list_filter = ('status', 'category', 'updated_at',)
     ordering = ('-created_at',)
-    readonly_fields = ('uuid', 'created_at', 'updated_at',)
+    readonly_fields = ('uuid', 'created_at', 'updated_at', 'views',)
     fieldsets =  (
         ('General Information', {
             'fields': ('title', 'description', 'content', 'thumbnail', 'keywords', 'slug', 'category',)
