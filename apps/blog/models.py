@@ -50,7 +50,7 @@ postStatus = [
 
 
 class Post(models.Model):
-
+#Solo se mostraran al llamado los PUBLISHED
     class PostObjects(models.Manager):
         #Todas las funciones dentro de una clase llevan self
         def get_queryset(self):
