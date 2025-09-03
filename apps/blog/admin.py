@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Post, Heading, Category
+from .models import Post, Heading, Category, PostAnalytics
 from django_ckeditor_5.widgets import CKEditor5Widget
 
 
@@ -13,6 +13,7 @@ class CategoryAdmin(admin.ModelAdmin):
     list_filter = ('parent',)
     oredering = ('name')
     readonly_fields = ('uuid',)
+    list_editable = ('title',)
 
 class PostAdminForm(forms.ModelForm):
     content = forms.CharField(widget=CKEditor5Widget(config_name='default'))
@@ -52,6 +53,8 @@ class PostAdmin(admin.ModelAdmin):
     )
     inlines = [HeadingInline]
 
+
+
 #Ya se hace uso de Inline
 # @admin.register(Heading)
 # class HeadingAdmin(admin.ModelAdmin):
@@ -61,3 +64,14 @@ class PostAdmin(admin.ModelAdmin):
 #     oredering = ('post', 'order')
 #     prepopulated_fields = {'slug': ('title',)}
 
+@admin.register(PostAnalytics)
+class PostAnalytics(admin.ModelAdmin):
+    list_display = ('post_title', 'views', 'impressions', 'clicks', 'click_through_rate', 'avg_time_on_page',)
+    search_fields = ('post__title',)
+    readonly_fields = ('post', 'views', 'impressions', 'clicks', 'click_through_rate', 'avg_time_on_page',)
+    #ordering = ('-created_at',)
+
+    def post_title(self, obj):
+        return obj.post.title
+
+    post_title.short_description = 'Post Title'

@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from .utils import get_client_ip
 
-from .models import Post, Heading, PostView
+from .models import Post, Heading, PostView, PostAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, ViewPostSerializer
 
 
@@ -21,11 +21,10 @@ class PostDetailView(APIView):
         post = Post.post_objects.get(slug=slug)
         serialized_post = PostSerializer(post).data
         #Para hacer conteo de visualizaciones
-        client_ip =  get_client_ip(request)
-        if PostView.objects.filter(post=post, ip_address=client_ip).exists():
-            return Response(serialized_post)
+        #Incrementa post view count
+        post_analytics = PostAnalytics.objects.get(post=post)
+        post_analytics.increment_view(request)
 
-        PostView.objects.create(post=post, ip_address=client_ip)
         return Response(serialized_post)
 
 

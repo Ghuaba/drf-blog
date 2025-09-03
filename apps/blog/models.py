@@ -1,8 +1,10 @@
 import uuid
 from django.utils.text import slugify
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django_ckeditor_5.fields import CKEditor5Field
-
+from .utils import get_client_ip
 
 
 def blog_thumbnail_directory(instance, filename):
@@ -72,7 +74,7 @@ class Post(models.Model):
     objects = models.Manager() #Default manager
     post_objects = PostObjects()  # Custom manager for published posts
 
-    category = models.ForeignKey(Category, on_delete=models.PROTECT)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
@@ -84,14 +86,46 @@ class Post(models.Model):
 
 class PostView(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    post = models.ForeignKey(Post, on_delete= models.PROTECT, related_name='post_view')
+    post = models.ForeignKey(Post, on_delete= models.CASCADE, related_name='post_view')
     ip_address = models.GenericIPAddressField()
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class PostAnalytics(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    post = models.ForeignKey(Post, on_delete= models.CASCADE, related_name='post_analytics')
+    views = models.PositiveIntegerField(default=0)
+    impressions = models.PositiveIntegerField(default=0)
+    clicks = models.PositiveIntegerField(default=0)
+    click_through_rate = models.FloatField(default=0)
+    avg_time_on_page = models.FloatField(default=0)
+
+    def increment_click(self):
+        self.clicks +=1
+        self._update_click_through_rate()
+
+    def _update_click_through_rate(self):
+        if self.impressions > 0:
+            self.click_through_rate = (self.clicks / self.impressions) * 100
+        
+    def increment_impression(self):
+        self.impressions += 1
+        self._update_click_through_rate()
+
+    def increment_view(self, request):
+        ip_address =  get_client_ip(request)
+
+        if not PostView.objects.filter(post=self.post, ip_address=ip_address).exists():
+            PostView.objects.create(post=self.post, ip_address=ip_address)
+            self.views +=1
+            self.save()
+
+    def __str__(self):
+        return str(self.uuid)
+
 class Heading(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    post = models.ForeignKey(Post, on_delete=models.PROTECT, related_name='headings')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='headings')
     title = models.CharField(max_length=255)
     slug = models.CharField(max_length = 255)
     level = models.IntegerField(
@@ -113,3 +147,9 @@ class Heading(models.Model):
         if not self.slug:
             self.slug = slugify(self.title)
         super().save(*argas, **kwargs)
+
+#cada vez que se cree un Post, también se cree su registro en PostAnalytics
+@receiver(post_save, sender=Post)
+def create_post_analytics(sender, instance, created, **kwargs):
+    if created:
+        PostAnalytics.objects.create(post=instance)
