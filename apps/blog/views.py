@@ -29,6 +29,8 @@ class PostDetailView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             #FOrma correcemtne de obetener el slug a partir de los Kwargs
+            #Sirva para obtener a partir de del URL del request
+            #si el slug lo defines en la URL del endpoint.
             slug = self.kwargs.get('slug')
             post = Post.post_objects.get(slug=slug)
         except Post.DoesNotExist:
@@ -56,6 +58,29 @@ class PostHeadingsView(APIView):
         serialized_headings = HeadingSerializer(headings, many=True).data
         return Response(serialized_headings)
 
+
+class IncrementPostClickView(APIView):
+    def post(self, request):
+        """
+        Incrementa el contado del clicjks de un post basado en su slug
+        Endpoint recibe el slug en el cuerpo de la petición (JSON).
+        """
+        data = request.data
+        try:
+            post = Post.post_objects.get(slug=data['slug'])
+        except PostAnalytics.DoesNotExist:
+            raise NotFound(detail="The requested post does not exist")
+
+        try:
+            post_analytics, created = PostAnalytics.objects.get_or_create(post=post)
+            post_analytics.increment_click()
+        except Exception as e:
+            raise APIException(detail=f"An error ocurred while updateing post analytics: {str(e)}")
+
+        return Response({
+            "message": "Click incremented succesfully",
+            "clicks": post_analytics.clicks
+        })
 
 #Realizado con GenerisAPIView
 # #La clase mas sencilla con ListAPIView, mas automatico
