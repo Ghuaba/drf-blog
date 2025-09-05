@@ -45,6 +45,7 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'channels',
     'django_ckeditor_5',
+    'django_celery_results',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECTS_APPS + THIRD_PARTY_APPS
@@ -216,3 +217,25 @@ CACHES = {
 CHANNELS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
+
+#Usamos json comoi serialziador de mensaje predeterimando
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "America/Bogota"
+
+#Celery necesita el brokerm usamos redis para este 
+#COnfiguramos el broker con redis
+CELERY_BROKER_URL = env("REDIS_URL")
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'visibility_timeout': 3600,
+    'socket_timeout': 5,
+    'retry_timeout': True
+}
+
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'default'
+
+CELERY_IMPORTS = (
+    'core.tasks',
+)
