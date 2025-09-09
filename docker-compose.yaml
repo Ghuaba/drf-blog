@@ -1,61 +1,110 @@
+version: "3.9"
+
 services:
-  #Django App
+  # Database (Postgres)
+  django_db:
+    image: postgres:15-alpine
+    container_name: postgresql
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: django
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: django_db
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U django -d django_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - django_network
+    #No expongo el puerto a tu host, a menos que lo necesites
+    # ports:
+    #   - 5432:5432
+
+  # Redis
+  django_redis:
+    image: redis:7-alpine
+    container_name: django_redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - django_network
+    #no expongo el puerto innecesariamente
+    # ports:
+    #   - 6379:6379
+
+  # Django App
   backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: drf-blog-backend   # se reutiliza en celery_worker y celery_beat
     container_name: django
-    build: .
     command: uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --reload
     volumes:
       - .:/app
     ports:
       - 8000:8000
-    depends_on:
-      - django_redis
     env_file:
       - core/.env
+    restart: unless-stopped
+    depends_on:
+      django_db:
+        condition: service_healthy
+      django_redis:
+        condition: service_healthy
+    networks:
+      - django_network
 
-  #redis
-  django_redis:
-    image: redis
-    container_name: django_redis
-    ports:
-      - 6379:6379
-
-  #Database
-  django_db:      
-    image: postgres
-    container_name: postgresql
-    restart: always
-    environment:
-      POSTGRES_USER: django
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: django_db
-    ports:
-      - 5432:5432
-    volumes:
-      - .dbdata:/var/lib/postgresql
-
-  #Celery
+  # Celery Worker
   celery_worker:
+    image: drf-blog-backend
     container_name: blog_celery_worker
-    build: .
-    command: celery -A core worker --loglevel=info
+    command: celery -A core worker --loglevel=info --concurrency=2
     volumes:
       - .:/app
-    ports:
-      - 8001:8001
+    env_file:
+      - core/.env
+    restart: unless-stopped
     depends_on:
-      - django_redis
-      - django_db
-  
-  #Celery Beat
+      backend:
+        condition: service_started
+      django_db:
+        condition: service_healthy
+      django_redis:
+        condition: service_healthy
+    networks:
+      - django_network
+
+  # Celery Beat
   celery_beat:
+    image: drf-blog-backend
     container_name: blog_celery_beat
-    build: .
     command: celery -A core beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
       - .:/app
-    ports:
-      - 8002:8002
+    env_file:
+      - core/.env
+    restart: unless-stopped
     depends_on:
-      - django_redis
-      - django_db
+      backend:
+        condition: service_started
+      django_db:
+        condition: service_healthy
+      django_redis:
+        condition: service_healthy
+    networks:
+      - django_network
+
+networks:
+  django_network:
+    driver: bridge
+
+volumes:
+  dbdata:

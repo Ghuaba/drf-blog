@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, APIException
 import redis
 from django.conf import settings
+from core.permissions import HasValidAPIKey
+
 
 from .models import Post, Heading, PostView, PostAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, ViewPostSerializer
@@ -14,6 +16,8 @@ redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
 #Uso con APIView mas control
 class PostListView(APIView):
+    permission_classes = [HasValidAPIKey]
+
     def get(self, request, *args, **kwargs):
         try:
             posts = Post.post_objects.all()
@@ -34,6 +38,8 @@ class PostListView(APIView):
 
 
 class PostDetailView(APIView):
+    permission_classes = [HasValidAPIKey]
+
     def get(self, request, *args, **kwargs):
         try:
             #FOrma correcemtne de obetener el slug a partir de los Kwargs
@@ -60,6 +66,8 @@ class PostDetailView(APIView):
 
 
 class PostHeadingsView(APIView):
+    permission_classes = [HasValidAPIKey]
+
     def get(self, request, *args, **kwargs):
         post_slug = self.kwargs.get('slug')
         headings = Heading.objects.filter(post__slug=post_slug)
@@ -68,6 +76,8 @@ class PostHeadingsView(APIView):
 
 
 class IncrementPostClickView(APIView):
+    permission_classes = [HasValidAPIKey]
+
     def post(self, request):
         """
         Incrementa el contado del clicjks de un post basado en su slug
