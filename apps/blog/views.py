@@ -13,6 +13,8 @@ from django.core.cache import cache
 from .utils import get_client_ip, get_post_uuid
 from .tasks import increment_post_views_task, increment_post_impressions
 from .pagination import PostPagination
+from apps.utils.responses import standard_response
+
 
 from .models import Post, Heading, PostView, PostAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, ViewPostSerializer
@@ -52,12 +54,24 @@ class PostListView(GenericAPIView):
                 # Incrementar impresiones solo de la página actual      
                 for post in page_cached:
                     redis_client.incr(f"post:impressions:{get_post_uuid(post)}")
-                return self.get_paginated_response(page_cached)
+
+                #Envolvemos la paginacion en el repsonse estandarizado
+                
+                return standard_response(
+                    data=self.get_paginated_response(page_cached).data,
+                    message="Post fetched from cache",
+                    code=200
+                )
             
             #obtener posts de la base de datos si no estan en cache
             posts = Post.post_objects.all()
             if not posts.exists():
-                raise NotFound(detail="No posts found")
+                return standard_response(
+                    data=None,
+                    message="No post found",
+                    code=404,
+                    http_status=404
+                    )
             
             #Serializamos los datos
             #Paginar los datos serializados
@@ -67,18 +81,23 @@ class PostListView(GenericAPIView):
             cache.set("post_list", serialized_posts, timeout=60 * 5)
             page = self.paginate_queryset(serialized_posts)
 
-
-
             #INcrementamos impresiones en Redis para los post del cache
             for post in page:
                 redis_client.incr(f"post:impressions:{get_post_uuid(post)}")
 
-            return self.get_paginated_response(page)
+            return standard_response(
+                data=self.get_paginated_response(page).data,
+                message="Post fetched successfully",
+                code=200
+                )
     
-        except Post.DoesNotExist:
-            raise NotFound(detail="No posts found")
         except Exception as e:
-            raise APIException(detail=f"An unexpected error ocurred: {str(e)}")
+            return standard_response(
+                data=None,
+                message=f"An unexpected error occurred: {str(e)}",
+                code=500,
+                http_status=500
+                )
         
 
 
@@ -97,7 +116,11 @@ class PostDetailView(APIView):
             if cached_post:
                 #Incrementar vistas del post
                 increment_post_views_task.delay(slug, ip_address)
-                return Response(cached_post)
+                return standard_response(
+                    data=cached_post,
+                    message="Post get caching successfully",
+                    code=200
+                    )
 
             #obtener posts de la base de datos si no estan en cache
 
@@ -114,21 +137,62 @@ class PostDetailView(APIView):
             increment_post_views_task.delay(post.slug, ip_address)
 
         except Post.DoesNotExist:
-            raise NotFound(detail="The requested publicacion/post does not exist")
+            return standard_response(
+                data=None,
+                message="The requested publicacion/post does not exist",
+                code=404,
+                http_status=404
+            )
         except Exception as e:
-            raise APIException(detail=f"An unexpected error ocurred: {str(e)}")
+            return standard_response(
+                data=None,
+                message="An unexpected error ocurred: {str(e)}",
+                code=500,
+                http_status=500
+            )
         
-        return Response(serialized_post)
+        return standard_response(
+            data=serialized_post,
+            message="Post successfully",
+            code=200
+            )
 
 
 class PostHeadingsView(APIView):
     permission_classes = [HasValidAPIKey]
 
     def get(self, request, *args, **kwargs):
-        post_slug = self.kwargs.get('slug')
-        headings = Heading.objects.filter(post__slug=post_slug)
-        serialized_headings = HeadingSerializer(headings, many=True).data
-        return Response(serialized_headings)
+        try:
+            post_slug = self.kwargs.get('slug')
+            
+            # Obtener headings del post
+            headings = Heading.objects.filter(post__slug=post_slug)
+            
+            if not headings.exists():
+                return standard_response(
+                    data=None,
+                    message="No headings found for this post",
+                    code=404,
+                    http_status=404
+                )
+            
+            # Serializar resultados
+            serialized_headings = HeadingSerializer(headings, many=True).data
+            
+            return standard_response(
+                data=serialized_headings,
+                message="Headings fetched successfully",
+                code=200
+            )
+
+        except Exception as e:
+            return standard_response(
+                data=None,
+                message=f"An unexpected error occurred: {str(e)}",
+                code=500,
+                http_status=500
+            )
+
 
 
 class IncrementPostClickView(APIView):
@@ -143,18 +207,28 @@ class IncrementPostClickView(APIView):
         try:
             post = Post.post_objects.get(slug=data['slug'])
         except Post.DoesNotExist:
-            raise NotFound(detail="The requested post does not exist")
+            return standard_response(
+                data=None,
+                message="The requested post does not exist",
+                code=404,
+                http_status=404
+                )
 
         try:
             post_analytics, created = PostAnalytics.objects.get_or_create(post=post)
             post_analytics.increment_click()
         except Exception as e:
-            raise APIException(detail=f"An error ocurred while updateing post analytics: {str(e)}")
-
-        return Response({
-            "message": "Click incremented succesfully",
-            "clicks": post_analytics.clicks
-        })
+            return standard_response(
+                data=None,
+                message=f"An error ocurred while updating post analytics: {str(e)}",
+                code=500,
+                http_status=500
+                )
+        return standard_response(
+            data=post_analytics.clicks,
+            message="Click incremented successfully",
+            code=200,
+            )
 
 #Realizado con GenerisAPIView
 # #La clase mas sencilla con ListAPIView, mas automatico
