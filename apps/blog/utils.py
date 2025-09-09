@@ -7,3 +7,12 @@ def get_client_ip(request):
         ip = request.META.get('REMOTE_ADDR')# es la IP directamente reportada por el socket TCP (puede ser la del proxy si hay uno en medio)
     
     return ip
+
+def get_post_uuid(post):
+    """
+    Devuelve el UUID del post como string,
+    sin importar si viene de la DB (objeto) o del cache (dict).
+    """
+    if isinstance(post, dict):
+        return post["uuid"]
+    return str(post.uuid)

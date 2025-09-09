@@ -1,27 +1,38 @@
-from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView, GenericAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, APIException
+
 import redis
 from django.conf import settings
+
 from core.permissions import HasValidAPIKey
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
-from .utils import get_client_ip
-from .tasks import increment_post_views_task
+from .utils import get_client_ip, get_post_uuid
+from .tasks import increment_post_views_task, increment_post_impressions
+from .pagination import PostPagination
 
 from .models import Post, Heading, PostView, PostAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, ViewPostSerializer
-from .utils import get_client_ip
-from .tasks import increment_post_impressions
+
+
 
 redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
-#Uso con APIView mas control
-class PostListView(APIView):
-    permission_classes = [HasValidAPIKey]
 
+
+
+#Uso con APIView mas control
+#Ahora usare generic view para poder aplciar Paginacion
+class PostListView(GenericAPIView):
+    permission_classes = [HasValidAPIKey]
+    pagination_class = PostPagination
+
+    def get_queryset(self):
+        return Post.post_objects.all() 
+    
     #@method_decorator(cache_page(60 * 1))
     def get(self, request, *args, **kwargs):
         try:
@@ -32,11 +43,16 @@ class PostListView(APIView):
             """
             #Verificamos si los datos estan en cache
             cached_posts = cache.get("post_list")
+            #INcrementamos impresiones en Redis para los post del cache
             if cached_posts:
-                #INcrementamos impresiones en Redis para los post del cache
-                for post in cached_posts:
-                    redis_client.incr(f"post:impressions:{post['uuid']}")
-                return Response(cached_posts)
+
+                # Si hay cache, aplicar paginación sobre el array
+                page_cached = self.paginate_queryset(cached_posts)
+
+                # Incrementar impresiones solo de la página actual      
+                for post in page_cached:
+                    redis_client.incr(f"post:impressions:{get_post_uuid(post)}")
+                return self.get_paginated_response(page_cached)
             
             #obtener posts de la base de datos si no estan en cache
             posts = Post.post_objects.all()
@@ -44,21 +60,26 @@ class PostListView(APIView):
                 raise NotFound(detail="No posts found")
             
             #Serializamos los datos
-            serialized_posts = PostListSerializer(posts, many=True).data
+            #Paginar los datos serializados
 
+            serialized_posts = PostListSerializer(posts, many=True).data
             #Guardamos los datos en cache
             cache.set("post_list", serialized_posts, timeout=60 * 5)
+            page = self.paginate_queryset(serialized_posts)
+
+
 
             #INcrementamos impresiones en Redis para los post del cache
-            for post in posts:
-                redis_client.incr(f"post:impressions:{post.uuid}")
+            for post in page:
+                redis_client.incr(f"post:impressions:{get_post_uuid(post)}")
 
+            return self.get_paginated_response(page)
+    
         except Post.DoesNotExist:
             raise NotFound(detail="No posts found")
         except Exception as e:
             raise APIException(detail=f"An unexpected error ocurred: {str(e)}")
         
-        return Response(serialized_posts)
 
 
 #SOlo llamamos un objeto
