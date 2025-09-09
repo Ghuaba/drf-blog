@@ -5,7 +5,8 @@ from rest_framework.exceptions import NotFound, APIException
 import redis
 from django.conf import settings
 from core.permissions import HasValidAPIKey
-
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 
 from .models import Post, Heading, PostView, PostAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, ViewPostSerializer
@@ -18,6 +19,7 @@ redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 class PostListView(APIView):
     permission_classes = [HasValidAPIKey]
 
+    @method_decorator(cache_page(60 * 1))
     def get(self, request, *args, **kwargs):
         try:
             posts = Post.post_objects.all()
@@ -39,7 +41,8 @@ class PostListView(APIView):
 
 class PostDetailView(APIView):
     permission_classes = [HasValidAPIKey]
-
+    
+    @method_decorator(cache_page(60 * 1))
     def get(self, request, *args, **kwargs):
         try:
             #FOrma correcemtne de obetener el slug a partir de los Kwargs
