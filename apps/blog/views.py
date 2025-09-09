@@ -7,6 +7,9 @@ from django.conf import settings
 from core.permissions import HasValidAPIKey
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+from django.core.cache import cache
+from .utils import get_client_ip
+from .tasks import increment_post_views_task
 
 from .models import Post, Heading, PostView, PostAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, ViewPostSerializer
@@ -19,17 +22,36 @@ redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 class PostListView(APIView):
     permission_classes = [HasValidAPIKey]
 
-    @method_decorator(cache_page(60 * 1))
+    #@method_decorator(cache_page(60 * 1))
     def get(self, request, *args, **kwargs):
         try:
+            """
+            Esta aplicacion de caching Manual es mas lenta que hacer caching la vista entera, pero nos da mas modularidad y control para hacer lo que queremos
+            Se lo usa para Vistas con mucha lógica o operaciones adicionales
+            Si usara @cache_page, no podría actualizar Redis sin separar la logica, porque la vista ni siquiera se ejecuta cuando hay cache
+            """
+            #Verificamos si los datos estan en cache
+            cached_posts = cache.get("post_list")
+            if cached_posts:
+                #INcrementamos impresiones en Redis para los post del cache
+                for post in cached_posts:
+                    redis_client.incr(f"post:impressions:{post['uuid']}")
+                return Response(cached_posts)
+            
+            #obtener posts de la base de datos si no estan en cache
             posts = Post.post_objects.all()
             if not posts.exists():
                 raise NotFound(detail="No posts found")
             
-            for post in posts:
-                redis_client.incr(f"post:impressions:{post.id}")
-
+            #Serializamos los datos
             serialized_posts = PostListSerializer(posts, many=True).data
+
+            #Guardamos los datos en cache
+            cache.set("post_list", serialized_posts, timeout=60 * 5)
+
+            #INcrementamos impresiones en Redis para los post del cache
+            for post in posts:
+                redis_client.incr(f"post:impressions:{post.uuid}")
 
         except Post.DoesNotExist:
             raise NotFound(detail="No posts found")
@@ -39,32 +61,42 @@ class PostListView(APIView):
         return Response(serialized_posts)
 
 
+#SOlo llamamos un objeto
 class PostDetailView(APIView):
     permission_classes = [HasValidAPIKey]
-    
-    @method_decorator(cache_page(60 * 1))
+
+    #@method_decorator(cache_page(60 * 1))
     def get(self, request, *args, **kwargs):
+        ip_address =  get_client_ip(request)
+        slug = self.kwargs.get('slug')
+
         try:
+            #Verificamos si los datos estan en cache
+            cached_post = cache.get(f"post_detail:{slug}")
+            if cached_post:
+                #Incrementar vistas del post
+                increment_post_views_task.delay(slug, ip_address)
+                return Response(cached_post)
+
+            #obtener posts de la base de datos si no estan en cache
+
             #FOrma correcemtne de obetener el slug a partir de los Kwargs
             #Sirva para obtener a partir de del URL del request
             #si el slug lo defines en la URL del endpoint.
-            slug = self.kwargs.get('slug')
             post = Post.post_objects.get(slug=slug)
+            serialized_post = PostSerializer(post).data
+
+            #Guardar en cache
+            cache.set(f"post_detail:{slug}", serialized_post, timeout=60 * 1)
+
+            #Incrementar vistas si no estaba en cache
+            increment_post_views_task.delay(post.slug, ip_address)
+
         except Post.DoesNotExist:
             raise NotFound(detail="The requested publicacion/post does not exist")
         except Exception as e:
             raise APIException(detail=f"An unexpected error ocurred: {str(e)}")
         
-        serialized_post = PostSerializer(post).data
-        #Para hacer conteo de visualizaciones
-        #Incrementa post view count
-        try:
-            post_analytics = PostAnalytics.objects.get(post=post)
-            post_analytics.increment_view(request)
-        except PostAnalytics.DoesNotExist:
-            raise NotFound(detail="Analytics data for thuis post does not exist")
-        except Exception as e:
-            raise APIException(detail=f"An error ocurred while updateing post analytics: {str(e)}")
         return Response(serialized_post)
 
 
@@ -89,7 +121,7 @@ class IncrementPostClickView(APIView):
         data = request.data
         try:
             post = Post.post_objects.get(slug=data['slug'])
-        except PostAnalytics.DoesNotExist:
+        except Post.DoesNotExist:
             raise NotFound(detail="The requested post does not exist")
 
         try:
@@ -123,5 +155,3 @@ class IncrementPostClickView(APIView):
 #     def get_queryset(self):
 #         post_slug = self.kwargs.get("slug")
 #         return Heading.objects.filter(post__slug=post_slug)
-
-        
