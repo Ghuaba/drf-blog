@@ -46,6 +46,7 @@ THIRD_PARTY_APPS = [
     'channels',
     'django_ckeditor_5',
     'django_celery_results',
+    'django_celery_beat',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECTS_APPS + THIRD_PARTY_APPS
@@ -189,6 +190,8 @@ CHANNELS_LAYERS = {
 }
 
 
+REDIS_HOST = env("REDIS_HOST")
+
 """
 CLIENT_CLASS = Define el tipo de cliente de Redis que Django usa como cache
 "django_redis.client.DefaultClient"	Usa el cliente por defecto provisto por django-redis
@@ -240,3 +243,6 @@ CELERY_IMPORTS = (
     'core.tasks',
     'apps.blog.tasks'
 )
+
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_BEAT_SCHEDULE = {}
