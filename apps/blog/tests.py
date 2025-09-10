@@ -1,9 +1,12 @@
+from unittest.mock import patch
 from django.test import TestCase
 from django.urls import reverse
 
 from django.conf import settings
 
+from rest_framework import status
 from rest_framework.test import APIClient
+from django.core.cache import cache
 
 
 from .models import Post, Heading, Category, PostAnalytics
@@ -97,6 +100,7 @@ class HeadingModelTest(TestCase):
 class PostListViewTest(TestCase):
     def setUp(self):
         self.client = APIClient()
+        cache.clear()
         self.category = Category.objects.create(name="API", slug="api")
         self.api_key = settings.VALID_API_KEYS[0]
         self.post = Post.objects.create(
@@ -108,6 +112,9 @@ class PostListViewTest(TestCase):
             category=self.category,
             status="published"
         )
+        
+    def tearDown(self):
+        cache.clear()
 
     def test_get_post_list(self):
         """
@@ -119,7 +126,267 @@ class PostListViewTest(TestCase):
             HTTP_API_KEY=self.api_key
             )
 
-        print(response.json())
+        #print(response.json())
         
         data = response.json()
-        #self.assertIn
+        
+        self.assertIn('success', data)
+        self.assertTrue(data['success'])
+        
+        self.assertIn('status', data)
+        self.assertEqual(data['status'], 200)
+        
+        self.assertIn('code', data)
+        self.assertEqual(data['code'], 200)
+
+        self.assertIn('count', data)
+        self.assertEqual(data['count'], 1)
+
+        results = data['results']
+        self.assertEqual(len(results), 1)
+        
+        post_data = results[0]
+        self.assertEqual(post_data['uuid'], str(self.post.uuid))
+        self.assertEqual(post_data['title'], self.post.title)
+        self.assertEqual(post_data['description'], self.post.description)
+        self.assertIsNone(post_data['thumbnail'])
+        self.assertEqual(post_data['slug'], self.post.slug)
+    
+        category_data = post_data['category']
+        self.assertEqual(category_data['name'], self.category.name)
+        self.assertEqual(category_data['slug'], self.category.slug)
+        self.assertEqual(post_data['view_count'], 0)
+
+        self.assertIsNone(data['next'])
+        self.assertIsNone(data['previous'])
+
+class PostDetailViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        cache.clear()
+
+        # Configuración de la API-Key de prueba
+        self.api_key = settings.VALID_API_KEYS[0]
+
+        # Crear datos de prueba
+        self.category = Category.objects.create(name="Detail Category", slug="detail-category")
+        self.post = Post.objects.create(
+            title="Detail Post",
+            description="Detailed post description",
+            content="Detailed content",
+            slug="detail-post",
+            category=self.category,
+            status="published"
+        )
+
+    def tearDown(self):
+        cache.clear() 
+
+
+    @patch('apps.blog.tasks.increment_post_views_task.delay')
+    def test_get_post_detail_success(self, mock_increment_views):
+        """
+        Test para verificar que se obtienen los detalles de un post existente
+        y que la tarea de incremento de vistas se ejecuta correctamente.
+        """
+        # Ruta hacia la vista con query parameter 'slug'
+        url = reverse('post-detail', args=[self.post.slug])
+
+        # Simula una solicitud GET con encabezado API-Key
+        response = self.client.get(
+            url,
+            HTTP_API_KEY=self.api_key
+        )
+
+        # Verifica el estado de la respuesta
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Decodifica la respuesta JSON
+        data = response.json()
+
+        # Verifica el formato de la respuesta
+        self.assertIn('success', data)
+        self.assertTrue(data['success'])
+        self.assertIn('status', data)
+        self.assertEqual(data['status'], 200)
+        self.assertIn('data', data)
+
+        post_data = data['data']
+
+        self.assertEqual(post_data['uuid'], str(self.post.uuid))
+        self.assertEqual(post_data['title'], self.post.title)
+        self.assertEqual(post_data['description'], self.post.description)
+        self.assertIsNone(post_data['thumbnail'])
+        self.assertEqual(post_data['slug'], self.post.slug)
+
+        # Verifica los detalles de la categoría
+        category_data = post_data['category']
+        self.assertEqual(category_data['name'], self.category.name)
+        self.assertEqual(category_data['slug'], self.category.slug)
+
+        # Verifica que el conteo de vistas sea inicial (0)
+        self.assertEqual(post_data['view_count'], 0)
+
+        mock_increment_views.assert_called_once_with(self.post.slug, '127.0.0.1')  # IP predeterminada en tests
+
+
+    @patch('apps.blog.tasks.increment_post_views_task.delay')
+    def test_get_post_detail_not_found(self, mock_increment_views):
+        """
+        Test para verificar que se devuelve un error 404 si el post no existe.
+        """
+        # Ruta hacia la vista con un slug inexistente
+        url = reverse('post-detail', args=['non-existent-slug'])
+
+        # Simula una solicitud GET con encabezado API-Key
+        response = self.client.get(
+            url,
+            HTTP_API_KEY=self.api_key
+        )
+
+        # Verifica el estado de la respuesta
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+        # Decodifica la respuesta JSON
+        data = response.json()
+
+        # Verifica el mensaje de error
+        self.assertIn('message', data)
+        self.assertEqual(data['message'], "The requested publicacion/post does not exist")
+
+
+class PostHeadingsViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        cache.clear()
+
+        # Configuración de la API-Key de prueba
+        self.api_key = settings.VALID_API_KEYS[0]
+
+        # Crear datos de prueba
+        self.category = Category.objects.create(name="Test Category", slug="test-category")
+        self.post = Post.objects.create(
+            title="Post with Headings",
+            description="Post with multiple headings",
+            content="Content",
+            slug="post-with-headings",
+            category=self.category,
+            status="published"
+        )
+        self.heading1 = Heading.objects.create(
+            post=self.post,
+            title="Heading 1",
+            slug="heading-1",
+            level=1,
+            order=1
+        )
+        self.heading2 = Heading.objects.create(
+            post=self.post,
+            title="Heading 2",
+            slug="heading-2",
+            level=2,
+            order=2
+        )
+
+    def tearDown(self):
+        cache.clear() 
+    
+    def test_get_post_headings_success(self):
+        """
+        Test para obtener encabezados de un post existente.
+        """
+        url = reverse('post-headings-view', args=[self.post.slug])
+
+        response = self.client.get(
+            url,
+            HTTP_API_KEY=self.api_key
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        self.assertTrue(data['success'])
+        self.assertEqual(data['status'], 200)
+        self.assertIn('results', data)
+
+        # Verificar los encabezados
+        results = data['results']
+        self.assertEqual(len(results), 2)
+
+        self.assertEqual(results[0]['title'], self.heading1.title)
+        self.assertEqual(results[0]['slug'], self.heading1.slug)
+        self.assertEqual(results[0]['level'], self.heading1.level)
+
+        self.assertEqual(results[1]['title'], self.heading2.title)
+        self.assertEqual(results[1]['slug'], self.heading2.slug)
+        self.assertEqual(results[1]['level'], self.heading2.level)
+
+
+    def test_get_post_headings_not_found(self):
+        """
+        Test para verificar que no se encuentran encabezados para un slug inexistente.
+        """
+        url = reverse('post-headings-view', args=['non-existent-slug'])
+
+        response = self.client.get(
+            url,
+            HTTP_API_KEY=self.api_key
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        self.assertTrue(data['success'])
+        self.assertEqual(data['status'], 200)
+        self.assertEqual(len(data['results']), 0)
+
+
+class IncrementPostClickViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        cache.clear()
+
+        self.api_key = settings.VALID_API_KEYS[0]
+
+        self.category = Category.objects.create(name="Analytics Category", slug="analytics-category")
+        self.post = Post.objects.create(
+            title="Post for Analytics",
+            description="Post description",
+            content="Content",
+            slug="post-for-analytics",
+            category=self.category,
+            status="published"
+        )
+
+    def tearDown(self):
+        cache.clear() 
+    
+
+def test_increment_post_click_success(self):
+    url = reverse('increment-post-click')
+    response = self.client.post(
+        url,
+        {"slug": self.post.slug},
+        HTTP_API_KEY=self.api_key,
+        format='json'
+    )
+
+    self.assertEqual(response.status_code, status.HTTP_200_OK)
+    data = response.json()
+
+    # Verifica la estructura principal
+    self.assertIn('success', data)
+    self.assertTrue(data['success'])
+    self.assertIn('status', data)
+    self.assertEqual(data['status'], 200)
+    self.assertIn('message', data)
+    self.assertEqual(data['message'], "Click incremented successfully")
+    self.assertIn('data', data)
+
+    # Verifica el valor del contador
+    self.assertEqual(data['data'], 1)  # Primera llamada, clicks = 1
+
+    # Verifica el modelo
+    from apps.blog.models import PostAnalytics
+    post_analytics = PostAnalytics.objects.get(post=self.post)
+    self.assertEqual(post_analytics.clicks, 1)

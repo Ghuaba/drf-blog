@@ -38,6 +38,13 @@ class PostListView(GenericAPIView):
     #@method_decorator(cache_page(60 * 1))
     def get(self, request, *args, **kwargs):
         try:
+            if request.query_params:
+                return standard_response(
+                    data=None,
+                    message="Invalid query parameters for this endpoint",
+                    code=400,
+                    http_status=400
+                )
             """
             Esta aplicacion de caching Manual es mas lenta que hacer caching la vista entera, pero nos da mas modularidad y control para hacer lo que queremos
             Se lo usa para Vistas con mucha lógica o operaciones adicionales
@@ -115,7 +122,7 @@ class PostDetailView(APIView):
             cached_post = cache.get(f"post_detail:{slug}")
             if cached_post:
                 #Incrementar vistas del post
-                increment_post_views_task.delay(slug, ip_address)
+                increment_post_views_task.delay(cached_post['slug'], ip_address)
                 return standard_response(
                     data=cached_post,
                     message="Post get caching successfully",
@@ -168,15 +175,7 @@ class PostHeadingsView(APIView):
             # Obtener headings del post
             headings = Heading.objects.filter(post__slug=post_slug)
             
-            if not headings.exists():
-                return standard_response(
-                    data=None,
-                    message="No headings found for this post",
-                    code=404,
-                    http_status=404
-                )
-            
-            # Serializar resultados
+            # Serializar resultados (incluso si está vacío)
             serialized_headings = HeadingSerializer(headings, many=True).data
             
             return standard_response(
