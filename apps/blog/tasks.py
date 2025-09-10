@@ -47,7 +47,14 @@ def sync_impressions_to_db():
             post_uuid = key.decode("utf-8").split(":")[-1]
             impressions = int(redis_client.get(key))
 
-            analytics, created = PostAnalytics.objects.get_or_create(post__uuid=post_uuid)
+            # Obtener el Post real
+            post = Post.objects.filter(uuid=post_uuid).first()
+            if not post:
+                logger.warning(f"Post with UUID {post_uuid} not found, skipping.")
+                redis_client.delete(key)
+                continue
+
+            analytics, created = PostAnalytics.objects.get_or_create(post=post)
             analytics.impressions += impressions
             analytics.save()
             

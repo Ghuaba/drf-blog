@@ -1,8 +1,15 @@
 from django.test import TestCase
+from django.urls import reverse
+
+from django.conf import settings
+
+from rest_framework.test import APIClient
+
+
 from .models import Post, Heading, Category, PostAnalytics
 
 
-# Create your tests here.
+### MODELS TESTS ###
 class CategoryModelTest(TestCase):
     def setUp(self):
         self.category = Category.objects.create(
@@ -84,3 +91,35 @@ class HeadingModelTest(TestCase):
     def test_heading_creation(self):
         self.assertEqual(self.heading.slug, "heading-1")
         self.assertEqual(self.heading.level, 1)
+
+
+### VIEWS TESTS ###
+class PostListViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.category = Category.objects.create(name="API", slug="api")
+        self.api_key = settings.VALID_API_KEYS[0]
+        self.post = Post.objects.create(
+            title="API Post",
+            description="API post description",
+            content="API Content",
+            thumbnail=None,
+            slug="api-post",
+            category=self.category,
+            status="published"
+        )
+
+    def test_get_post_list(self):
+        """
+        El lugar al que vamos a hacer la peticion es el name de los urls  name='post-list'),
+        """
+        url = reverse('post-list')
+        response = self.client.get(
+            url,
+            HTTP_API_KEY=self.api_key
+            )
+
+        print(response.json())
+        
+        data = response.json()
+        #self.assertIn
